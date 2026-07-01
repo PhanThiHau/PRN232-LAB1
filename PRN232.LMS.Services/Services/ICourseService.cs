@@ -11,5 +11,6 @@ namespace PRN232.LMS.Services.Services
         Task<ApiResponse<CourseResponse>> CreateCourseAsync(CreateCourseRequest request);
         Task<ApiResponse<CourseResponse>> UpdateCourseAsync(int id, UpdateCourseRequest request);
         Task<ApiResponse<object>> DeleteCourseAsync(int id);
+        Task<ApiResponse<PagedResult<object>>> GetCourseEnrollmentsAsync(int courseId, QueryParameters queryParams);
     }
 }

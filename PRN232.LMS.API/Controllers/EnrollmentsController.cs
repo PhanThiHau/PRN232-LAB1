@@ -1,3 +1,5 @@
+using Asp.Versioning;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PRN232.LMS.Services.Common;
 using PRN232.LMS.Services.RequestModels;
@@ -7,11 +9,12 @@ using PRN232.LMS.Services.Services;
 namespace PRN232.LMS.API.Controllers
 {
     /// <summary>
-    /// API Controller for managing Enrollment resources.
+    /// API v1 Controller for managing Enrollment resources.
+    /// Supports nested access via courses and students.
     /// </summary>
-    [Route("api/[controller]")]
     [ApiController]
-    [Produces("application/json")]
+    [ApiVersion("1.0")]
+    [Route("api/v{version:apiVersion}/enrollments")]
     public class EnrollmentsController : ControllerBase
     {
         private readonly IEnrollmentService _enrollmentService;
@@ -48,37 +51,34 @@ namespace PRN232.LMS.API.Controllers
         /// <returns>The enrollment with related details.</returns>
         /// <response code="200">Returns the enrollment.</response>
         /// <response code="404">Enrollment not found.</response>
-        /// <response code="500">Internal server error.</response>
-        [HttpGet("{id}")]
+        [HttpGet("{id:int}", Name = "GetEnrollmentById")]
         [ProducesResponseType(typeof(ApiResponse<EnrollmentResponse>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<EnrollmentResponse>), StatusCodes.Status404NotFound)]
-        [ProducesResponseType(typeof(ApiResponse<EnrollmentResponse>), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> GetEnrollmentById(int id)
+        public async Task<IActionResult> GetEnrollmentById([FromRoute] int id)
         {
             var result = await _enrollmentService.GetEnrollmentByIdAsync(id);
             if (!result.Success)
             {
                 if (result.Message.Contains("not found", StringComparison.OrdinalIgnoreCase))
-                {
                     return NotFound(result);
-                }
                 return StatusCode(StatusCodes.Status500InternalServerError, result);
             }
             return Ok(result);
         }
 
         /// <summary>
-        /// Creates a new enrollment.
+        /// Creates a new enrollment. Requires authentication.
         /// </summary>
         /// <param name="request">The enrollment creation request.</param>
         /// <returns>The newly created enrollment.</returns>
         /// <response code="201">Enrollment created successfully.</response>
         /// <response code="400">Invalid request data.</response>
-        /// <response code="500">Internal server error.</response>
+        /// <response code="401">Unauthorized.</response>
         [HttpPost]
+        [Authorize]
         [ProducesResponseType(typeof(ApiResponse<EnrollmentResponse>), StatusCodes.Status201Created)]
         [ProducesResponseType(typeof(ApiResponse<EnrollmentResponse>), StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(typeof(ApiResponse<EnrollmentResponse>), StatusCodes.Status500InternalServerError)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         public async Task<IActionResult> CreateEnrollment([FromBody] CreateEnrollmentRequest request)
         {
             if (!ModelState.IsValid)
@@ -99,21 +99,22 @@ namespace PRN232.LMS.API.Controllers
         }
 
         /// <summary>
-        /// Updates an existing enrollment by ID.
+        /// Updates an existing enrollment by ID. Requires authentication.
         /// </summary>
         /// <param name="id">The enrollment ID to update.</param>
         /// <param name="request">The enrollment update request.</param>
         /// <returns>The updated enrollment.</returns>
         /// <response code="200">Enrollment updated successfully.</response>
         /// <response code="400">Invalid request data.</response>
+        /// <response code="401">Unauthorized.</response>
         /// <response code="404">Enrollment not found.</response>
-        /// <response code="500">Internal server error.</response>
-        [HttpPut("{id}")]
+        [HttpPut("{id:int}")]
+        [Authorize]
         [ProducesResponseType(typeof(ApiResponse<EnrollmentResponse>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<EnrollmentResponse>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<EnrollmentResponse>), StatusCodes.Status404NotFound)]
-        [ProducesResponseType(typeof(ApiResponse<EnrollmentResponse>), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> UpdateEnrollment(int id, [FromBody] UpdateEnrollmentRequest request)
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        public async Task<IActionResult> UpdateEnrollment([FromRoute] int id, [FromBody] UpdateEnrollmentRequest request)
         {
             if (!ModelState.IsValid)
             {
@@ -128,35 +129,34 @@ namespace PRN232.LMS.API.Controllers
             if (!result.Success)
             {
                 if (result.Message.Contains("not found", StringComparison.OrdinalIgnoreCase))
-                {
                     return NotFound(result);
-                }
                 return StatusCode(StatusCodes.Status500InternalServerError, result);
             }
             return Ok(result);
         }
 
         /// <summary>
-        /// Deletes an enrollment by ID.
+        /// Deletes an enrollment by ID. Requires Admin role.
         /// </summary>
         /// <param name="id">The enrollment ID to delete.</param>
         /// <returns>Deletion confirmation.</returns>
         /// <response code="200">Enrollment deleted successfully.</response>
+        /// <response code="401">Unauthorized.</response>
+        /// <response code="403">Forbidden — Admin role required.</response>
         /// <response code="404">Enrollment not found.</response>
-        /// <response code="500">Internal server error.</response>
-        [HttpDelete("{id}")]
+        [HttpDelete("{id:int}")]
+        [Authorize(Roles = "Admin")]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
-        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> DeleteEnrollment(int id)
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        public async Task<IActionResult> DeleteEnrollment([FromRoute] int id)
         {
             var result = await _enrollmentService.DeleteEnrollmentAsync(id);
             if (!result.Success)
             {
                 if (result.Message.Contains("not found", StringComparison.OrdinalIgnoreCase))
-                {
                     return NotFound(result);
-                }
                 return StatusCode(StatusCodes.Status500InternalServerError, result);
             }
             return Ok(result);

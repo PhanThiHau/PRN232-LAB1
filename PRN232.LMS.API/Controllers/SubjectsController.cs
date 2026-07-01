@@ -1,3 +1,5 @@
+using Asp.Versioning;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PRN232.LMS.Services.Common;
 using PRN232.LMS.Services.RequestModels;
@@ -7,11 +9,12 @@ using PRN232.LMS.Services.Services;
 namespace PRN232.LMS.API.Controllers
 {
     /// <summary>
-    /// API Controller for managing Subject resources.
+    /// API v1 Controller for managing Subject resources.
     /// </summary>
-    [Route("api/[controller]")]
     [ApiController]
-    [Produces("application/json")]
+    [Authorize]
+    [ApiVersion("1.0")]
+    [Route("api/v{version:apiVersion}/subjects")]
     public class SubjectsController : ControllerBase
     {
         private readonly ISubjectService _subjectService;
@@ -44,41 +47,39 @@ namespace PRN232.LMS.API.Controllers
         /// <summary>
         /// Retrieves a specific subject by ID.
         /// </summary>
-        /// <param name="id">The subject ID.</param>
+        /// <param name="id">The subject ID (integer).</param>
         /// <returns>The subject details.</returns>
         /// <response code="200">Returns the subject.</response>
         /// <response code="404">Subject not found.</response>
-        /// <response code="500">Internal server error.</response>
-        [HttpGet("{id}")]
+        [HttpGet("{id:int}", Name = "GetSubjectById")]
         [ProducesResponseType(typeof(ApiResponse<SubjectResponse>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<SubjectResponse>), StatusCodes.Status404NotFound)]
-        [ProducesResponseType(typeof(ApiResponse<SubjectResponse>), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> GetSubjectById(int id)
+        public async Task<IActionResult> GetSubjectById([FromRoute] int id)
         {
             var result = await _subjectService.GetSubjectByIdAsync(id);
             if (!result.Success)
             {
                 if (result.Message.Contains("not found", StringComparison.OrdinalIgnoreCase))
-                {
                     return NotFound(result);
-                }
                 return StatusCode(StatusCodes.Status500InternalServerError, result);
             }
             return Ok(result);
         }
 
         /// <summary>
-        /// Creates a new subject.
+        /// Creates a new subject. Requires authentication.
+        /// SubjectCode must follow the format: 2-3 uppercase letters + 3 digits (e.g. PRN231).
         /// </summary>
         /// <param name="request">The subject creation request.</param>
         /// <returns>The newly created subject.</returns>
         /// <response code="201">Subject created successfully.</response>
         /// <response code="400">Invalid request data.</response>
-        /// <response code="500">Internal server error.</response>
+        /// <response code="401">Unauthorized.</response>
         [HttpPost]
+        [Authorize]
         [ProducesResponseType(typeof(ApiResponse<SubjectResponse>), StatusCodes.Status201Created)]
         [ProducesResponseType(typeof(ApiResponse<SubjectResponse>), StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(typeof(ApiResponse<SubjectResponse>), StatusCodes.Status500InternalServerError)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         public async Task<IActionResult> CreateSubject([FromBody] CreateSubjectRequest request)
         {
             if (!ModelState.IsValid)
@@ -99,21 +100,22 @@ namespace PRN232.LMS.API.Controllers
         }
 
         /// <summary>
-        /// Updates an existing subject by ID.
+        /// Updates an existing subject by ID. Requires authentication.
         /// </summary>
         /// <param name="id">The subject ID to update.</param>
         /// <param name="request">The subject update request.</param>
         /// <returns>The updated subject.</returns>
         /// <response code="200">Subject updated successfully.</response>
         /// <response code="400">Invalid request data.</response>
+        /// <response code="401">Unauthorized.</response>
         /// <response code="404">Subject not found.</response>
-        /// <response code="500">Internal server error.</response>
-        [HttpPut("{id}")]
+        [HttpPut("{id:int}")]
+        [Authorize]
         [ProducesResponseType(typeof(ApiResponse<SubjectResponse>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<SubjectResponse>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<SubjectResponse>), StatusCodes.Status404NotFound)]
-        [ProducesResponseType(typeof(ApiResponse<SubjectResponse>), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> UpdateSubject(int id, [FromBody] UpdateSubjectRequest request)
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        public async Task<IActionResult> UpdateSubject([FromRoute] int id, [FromBody] UpdateSubjectRequest request)
         {
             if (!ModelState.IsValid)
             {
@@ -128,35 +130,34 @@ namespace PRN232.LMS.API.Controllers
             if (!result.Success)
             {
                 if (result.Message.Contains("not found", StringComparison.OrdinalIgnoreCase))
-                {
                     return NotFound(result);
-                }
                 return StatusCode(StatusCodes.Status500InternalServerError, result);
             }
             return Ok(result);
         }
 
         /// <summary>
-        /// Deletes a subject by ID.
+        /// Deletes a subject by ID. Requires Admin role.
         /// </summary>
         /// <param name="id">The subject ID to delete.</param>
         /// <returns>Deletion confirmation.</returns>
         /// <response code="200">Subject deleted successfully.</response>
+        /// <response code="401">Unauthorized.</response>
+        /// <response code="403">Forbidden — Admin role required.</response>
         /// <response code="404">Subject not found.</response>
-        /// <response code="500">Internal server error.</response>
-        [HttpDelete("{id}")]
+        [HttpDelete("{id:int}")]
+        [Authorize(Roles = "Admin")]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
-        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> DeleteSubject(int id)
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        public async Task<IActionResult> DeleteSubject([FromRoute] int id)
         {
             var result = await _subjectService.DeleteSubjectAsync(id);
             if (!result.Success)
             {
                 if (result.Message.Contains("not found", StringComparison.OrdinalIgnoreCase))
-                {
                     return NotFound(result);
-                }
                 return StatusCode(StatusCodes.Status500InternalServerError, result);
             }
             return Ok(result);

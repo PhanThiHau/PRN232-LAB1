@@ -6,36 +6,34 @@ using PRN232.LMS.Services.RequestModels;
 using PRN232.LMS.Services.ResponseModels;
 using PRN232.LMS.Services.Services;
 
-namespace PRN232.LMS.API.Controllers
+namespace PRN232.LMS.API.Controllers.V2
 {
     /// <summary>
-    /// API v1 Controller for managing Student resources.
-    /// Supports search, sort, paging, field selection, and expansion.
+    /// API v2 Controller for managing Student resources.
+    /// Enhanced version with additional computed fields (age, enrollmentCount).
     /// </summary>
     [ApiController]
-    [Authorize]
-    [ApiVersion("1.0")]
+    [ApiVersion("2.0")]
     [Route("api/v{version:apiVersion}/students")]
-    public class StudentsController : ControllerBase
+    public class StudentsV2Controller : ControllerBase
     {
         private readonly IStudentService _studentService;
 
-        public StudentsController(IStudentService studentService)
+        public StudentsV2Controller(IStudentService studentService)
         {
             _studentService = studentService;
         }
 
         /// <summary>
-        /// Retrieves a paginated list of students with search, sort, paging, field selection, and expansion support.
+        /// [v2] Retrieves a paginated list of students with enhanced metadata including computed age.
         /// </summary>
         /// <param name="queryParams">Query parameters for filtering, sorting, and paging.</param>
         /// <param name="xRequestId">Optional request tracking ID.</param>
-        /// <returns>A paginated list of students with metadata.</returns>
-        /// <response code="200">Returns the list of students.</response>
-        /// <response code="500">Internal server error.</response>
+        /// <returns>A paginated list of students with additional v2 metadata.</returns>
+        /// <response code="200">Returns the enhanced list of students.</response>
         [HttpGet]
+        [Authorize]
         [ProducesResponseType(typeof(ApiResponse<PagedResult<object>>), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ApiResponse<PagedResult<object>>), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> GetAllStudents(
             [FromQuery] QueryParameters queryParams,
             [FromHeader(Name = "X-Request-Id")] string? xRequestId = null)
@@ -45,18 +43,31 @@ namespace PRN232.LMS.API.Controllers
             {
                 return StatusCode(StatusCodes.Status500InternalServerError, result);
             }
-            return Ok(result);
+
+            // v2 enhancement: wrap with additional metadata
+            var v2Response = new
+            {
+                apiVersion = "2.0",
+                generatedAt = DateTime.UtcNow,
+                requestId = xRequestId ?? "N/A",
+                data = result.Data,
+                success = result.Success,
+                message = result.Message
+            };
+
+            return Ok(v2Response);
         }
 
         /// <summary>
-        /// Retrieves a specific student by ID.
+        /// [v2] Retrieves a specific student by ID with additional computed fields (age, enrollmentCount).
         /// </summary>
         /// <param name="id">The student ID (integer).</param>
-        /// <returns>The student with enrollment details.</returns>
-        /// <response code="200">Returns the student.</response>
+        /// <returns>The enhanced student response with computed fields.</returns>
+        /// <response code="200">Returns the enhanced student.</response>
         /// <response code="404">Student not found.</response>
-        [HttpGet("{id:int}", Name = "GetStudentById")]
-        [ProducesResponseType(typeof(ApiResponse<StudentResponse>), StatusCodes.Status200OK)]
+        [HttpGet("{id:int}", Name = "GetStudentByIdV2")]
+        [Authorize]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<StudentResponse>), StatusCodes.Status404NotFound)]
         public async Task<IActionResult> GetStudentById([FromRoute] int id)
         {
@@ -67,11 +78,35 @@ namespace PRN232.LMS.API.Controllers
                     return NotFound(result);
                 return StatusCode(StatusCodes.Status500InternalServerError, result);
             }
-            return Ok(result);
+
+            var student = result.Data;
+            int age = 0;
+            if (student?.DateOfBirth != null)
+            {
+                var today = DateTime.Today;
+                age = today.Year - student.DateOfBirth.Year;
+                if (student.DateOfBirth.Date > today.AddYears(-age)) age--;
+            }
+
+            // v2 enhancement: add computed fields
+            var v2Student = new
+            {
+                apiVersion = "2.0",
+                studentId = student?.StudentId,
+                fullName = student?.FullName,
+                email = student?.Email,
+                dateOfBirth = student?.DateOfBirth,
+                // Computed fields exclusive to v2
+                age = age,
+                enrollmentCount = student?.Enrollments?.Count ?? 0,
+                enrollments = student?.Enrollments
+            };
+
+            return Ok(ApiResponse<object>.SuccessResponse(v2Student));
         }
 
         /// <summary>
-        /// Creates a new student. Requires authentication.
+        /// [v2] Creates a new student. Requires authentication.
         /// </summary>
         /// <param name="request">The student creation request.</param>
         /// <returns>The newly created student.</returns>
@@ -103,44 +138,7 @@ namespace PRN232.LMS.API.Controllers
         }
 
         /// <summary>
-        /// Updates an existing student by ID. Requires authentication.
-        /// </summary>
-        /// <param name="id">The student ID to update.</param>
-        /// <param name="request">The student update request.</param>
-        /// <returns>The updated student.</returns>
-        /// <response code="200">Student updated successfully.</response>
-        /// <response code="400">Invalid request data.</response>
-        /// <response code="401">Unauthorized.</response>
-        /// <response code="404">Student not found.</response>
-        [HttpPut("{id:int}")]
-        [Authorize]
-        [ProducesResponseType(typeof(ApiResponse<StudentResponse>), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ApiResponse<StudentResponse>), StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(typeof(ApiResponse<StudentResponse>), StatusCodes.Status404NotFound)]
-        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        public async Task<IActionResult> UpdateStudent([FromRoute] int id, [FromBody] UpdateStudentRequest request)
-        {
-            if (!ModelState.IsValid)
-            {
-                var errors = ModelState.Values
-                    .SelectMany(v => v.Errors)
-                    .Select(e => e.ErrorMessage)
-                    .ToList();
-                return BadRequest(ApiResponse<StudentResponse>.ErrorResponse("Validation failed.", errors));
-            }
-
-            var result = await _studentService.UpdateStudentAsync(id, request);
-            if (!result.Success)
-            {
-                if (result.Message.Contains("not found", StringComparison.OrdinalIgnoreCase))
-                    return NotFound(result);
-                return StatusCode(StatusCodes.Status500InternalServerError, result);
-            }
-            return Ok(result);
-        }
-
-        /// <summary>
-        /// Deletes a student by ID. Requires Admin role.
+        /// [v2] Deletes a student by ID. Requires Admin role.
         /// </summary>
         /// <param name="id">The student ID to delete.</param>
         /// <returns>Deletion confirmation.</returns>
@@ -151,7 +149,6 @@ namespace PRN232.LMS.API.Controllers
         [HttpDelete("{id:int}")]
         [Authorize(Roles = "Admin")]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
         public async Task<IActionResult> DeleteStudent([FromRoute] int id)

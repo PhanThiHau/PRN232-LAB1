@@ -29,6 +29,11 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://+:8080
       - ConnectionStrings__DefaultConnection=Server=db,1433;Database=LmsDb;User Id=sa;Password=LmsPassword@123;TrustServerCertificate=True;MultipleActiveResultSets=true
+      # JWT configuration via environment variables (overrides appsettings.json)
+      - Jwt__SecretKey=PRN232-LMS-Docker-SuperSecretKey-2024-MinLength256BitsForHS256!@#$%
+      - Jwt__Issuer=PRN232.LMS.API
+      - Jwt__Audience=PRN232.LMS.Client
+      - Jwt__ExpiresInMinutes=60
     depends_on:
       db:
         condition: service_healthy

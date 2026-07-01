@@ -12,11 +12,13 @@ namespace PRN232.LMS.Services.Services
     public class CourseService : ICourseService
     {
         private readonly ICourseRepository _courseRepository;
+        private readonly IEnrollmentRepository _enrollmentRepository;
         private readonly IMapper _mapper;
 
-        public CourseService(ICourseRepository courseRepository, IMapper mapper)
+        public CourseService(ICourseRepository courseRepository, IEnrollmentRepository enrollmentRepository, IMapper mapper)
         {
             _courseRepository = courseRepository;
+            _enrollmentRepository = enrollmentRepository;
             _mapper = mapper;
         }
 
@@ -149,6 +151,55 @@ namespace PRN232.LMS.Services.Services
             {
                 return ApiResponse<object>.ErrorResponse(
                     "An error occurred while deleting the course.",
+                    new List<string> { ex.Message });
+            }
+        }
+
+        public async Task<ApiResponse<PagedResult<object>>> GetCourseEnrollmentsAsync(int courseId, QueryParameters queryParams)
+        {
+            try
+            {
+                var courseExists = await _courseRepository.GetByIdAsync(courseId);
+                if (courseExists == null)
+                {
+                    return ApiResponse<PagedResult<object>>.ErrorResponse("Course not found.");
+                }
+
+                IQueryable<Enrollment> query = _enrollmentRepository.GetQueryable()
+                    .Where(e => e.CourseId == courseId);
+
+                query = QueryHelper.ApplyExpansion(query, queryParams.Expand);
+                query = QueryHelper.ApplySorting(query, queryParams.Sort);
+
+                int totalItems = await query.CountAsync();
+                int totalPages = (int)Math.Ceiling((double)totalItems / queryParams.Size);
+
+                var enrollments = await query
+                    .Skip((queryParams.Page - 1) * queryParams.Size)
+                    .Take(queryParams.Size)
+                    .ToListAsync();
+
+                var enrollmentResponses = _mapper.Map<List<EnrollmentResponse>>(enrollments);
+                var selectedData = QueryHelper.ApplyFieldSelection(enrollmentResponses, queryParams.Fields);
+
+                var pagedResult = new PagedResult<object>
+                {
+                    Items = selectedData,
+                    Pagination = new PaginationMetadata
+                    {
+                        Page = queryParams.Page,
+                        PageSize = queryParams.Size,
+                        TotalItems = totalItems,
+                        TotalPages = totalPages
+                    }
+                };
+
+                return ApiResponse<PagedResult<object>>.SuccessResponse(pagedResult);
+            }
+            catch (Exception ex)
+            {
+                return ApiResponse<PagedResult<object>>.ErrorResponse(
+                    "An error occurred while retrieving enrollments for this course.",
                     new List<string> { ex.Message });
             }
         }

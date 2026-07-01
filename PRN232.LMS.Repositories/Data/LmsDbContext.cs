@@ -14,6 +14,8 @@ namespace PRN232.LMS.Repositories.Data
         public DbSet<Subject> Subjects { get; set; }
         public DbSet<Student> Students { get; set; }
         public DbSet<Enrollment> Enrollments { get; set; }
+        public DbSet<User> Users { get; set; }
+        public DbSet<RefreshToken> RefreshTokens { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -25,6 +27,7 @@ namespace PRN232.LMS.Repositories.Data
             SeedCourses(modelBuilder);
             SeedStudents(modelBuilder);
             SeedEnrollments(modelBuilder);
+            SeedUsers(modelBuilder);
         }
 
         private void ConfigureEntities(ModelBuilder modelBuilder)
@@ -77,6 +80,48 @@ namespace PRN232.LMS.Repositories.Data
                       .HasForeignKey(e => e.CourseId)
                       .OnDelete(DeleteBehavior.Restrict);
             });
+
+            modelBuilder.Entity<User>(entity =>
+            {
+                entity.HasKey(e => e.UserId);
+                entity.Property(e => e.Username).IsRequired().HasMaxLength(50).IsUnicode(false);
+                entity.HasIndex(e => e.Username).IsUnique();
+                entity.Property(e => e.PasswordHash).IsRequired().HasMaxLength(255).IsUnicode(false);
+                entity.Property(e => e.Role).IsRequired().HasMaxLength(20).IsUnicode(false);
+            });
+
+            modelBuilder.Entity<RefreshToken>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Token).IsRequired().HasMaxLength(512).IsUnicode(false);
+                entity.HasOne(e => e.User)
+                      .WithMany(u => u.RefreshTokens)
+                      .HasForeignKey(e => e.UserId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+        }
+
+        private void SeedUsers(ModelBuilder modelBuilder)
+        {
+            // Passwords are BCrypt hashed:
+            // admin -> 123456  (BCrypt hash verified)
+            // user  -> 123456  (BCrypt hash verified)
+            modelBuilder.Entity<User>().HasData(
+                new User
+                {
+                    UserId = 1,
+                    Username = "admin",
+                    PasswordHash = "$2a$11$KfhLqh6JLIldisT5u4ExOOu5umy9Xxeqmr5hBWkj84dt8nyKjUg5a",
+                    Role = "Admin"
+                },
+                new User
+                {
+                    UserId = 2,
+                    Username = "user",
+                    PasswordHash = "$2a$11$KfhLqh6JLIldisT5u4ExOOu5umy9Xxeqmr5hBWkj84dt8nyKjUg5a",
+                    Role = "User"
+                }
+            );
         }
 
         private void SeedSemesters(ModelBuilder modelBuilder)
